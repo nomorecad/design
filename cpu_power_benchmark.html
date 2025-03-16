@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPU Power Distribution Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 1200px; margin: auto; }
+        .chart-container { width: 100%; height: 400px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        th { background-color: #f4f4f4; }
+        .tab-buttons { margin-bottom: 20px; }
+        .tab-buttons button { margin-right: 10px; padding: 10px; cursor: pointer; }
+        .tab-content { display: none; }
+        .active { display: block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>CPU Power Distribution Dashboard</h2>
+        <p>This dashboard provides a breakdown of power consumption across different CPU architectures (ARM, x86, PowerPC) based on execution units, memory hierarchy, and power management.</p>
+        
+        <div class="tab-buttons">
+            <button onclick="showTab('charts')">Charts</button>
+            <button onclick="showTab('table')">Data Table</button>
+			<button onclick="showTab('workloads')">Workload Power Distribution</button>
+        </div>
+        
+        <div id="charts" class="tab-content active">
+            <h3>Chart Mode</h3>
+            <label><input type="radio" name="chartMode" value="stack" checked> Stacked</label>
+            <label><input type="radio" name="chartMode" value="group"> Grouped</label>
+			
+            
+            <h3>Comparison Across Architectures</h3>
+            <div id="comparisonChart" class="chart-container"></div>
+            
+            <h3>Hierarchical Power Distribution</h3>
+            <div id="armStackedChart" class="chart-container"></div>
+            <div id="x86StackedChart" class="chart-container"></div>
+            <div id="ppcStackedChart" class="chart-container"></div>
+        </div>
+        
+        <div id="table" class="tab-content">
+            <h3>Central Data Table</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Hierarchy</th>
+                        <th>ARM (%)</th>
+                        <th>x86 (%)</th>
+                        <th>PowerPC (%)</th>
+                    </tr>
+                </thead>
+                <tbody id="data-table"></tbody>
+            </table>
+        </div>
+		
+		<div id="workloads" class="tab-content">
+            <h3>Workload Power Distribution</h3>
+        </div>
+		
+    </div>
+
+    <script>
+        const architectures = ["ARM (In-Order)", "ARM (Out-of-Order)", "x86", "PowerPC"];
+        const categories = ["Execution Units", "Cache & Memory Subsystem", "Fabric & Interconnect", "Control & Power Management"];
+
+        const subCategories = {
+            "Execution Units": { "Integer ALU": [10, 15, 18], "Floating-Point ALU": [7, 10, 12], "Vector/SIMD Units": [6, 10, 10], "Register File & Rename Logic": [5, 8, 8], "Reorder Buffer": [4, 7, 7] },
+            "Frontend & Branch Prediction": { "Instruction Fetch & Decode": [8, 10, 7], "Branch Prediction": [6, 8, 6] },
+            "Cache & Memory": { "L1 Data Cache": [6, 5, 5], "L1 Instruction Cache": [6, 5, 4], "L2 Cache": [10, 10, 8], "L3 Cache": [10, 10, 10], "Load Store & Prefetch": [8, 8, 8] },
+            "Fabric & Interconnect": { "Core-to-Core Interconnect": [5, 6, 10], "Memory Controllers": [5, 6, 8] },
+            "Control & Power Management": { "Clock Distribution": [7, 5, 5], "Reset Distribution": [2, 2, 2], "Voltage & Power Gating": [6, 3, 3] }
+        };
+        
+
+        const workloads = {
+            "Dhrystone": {
+                "ARM (In-Order)": [8, 6, 4, 2],
+                "ARM (Out-of-Order)": [10, 8, 5, 3],
+                "x86": [12, 10, 7, 3],
+                "PowerPC": [15, 12, 9, 4]
+            },
+            "Max Power": {
+                "ARM (In-Order)": [18, 12, 8, 4],
+                "ARM (Out-of-Order)": [20, 15, 10, 5],
+                "x86": [25, 18, 12, 7],
+                "PowerPC": [30, 20, 15, 8]
+            },
+            "Max Power L2": {
+                "ARM (In-Order)": [16, 10, 6, 3],
+                "ARM (Out-of-Order)": [18, 12, 7, 4],
+                "x86": [22, 15, 9, 5],
+                "PowerPC": [27, 18, 12, 6]
+            },
+            "Vector Benchmarks": {
+                "ARM (In-Order)": [12, 8, 5, 2],
+                "ARM (Out-of-Order)": [15, 10, 6, 3],
+                "x86": [18, 12, 8, 4],
+                "PowerPC": [20, 15, 10, 5]
+            },
+            "Typical Case": {
+                "ARM (In-Order)": [10, 7, 5, 2],
+                "ARM (Out-of-Order)": [12, 9, 6, 3],
+                "x86": [14, 11, 8, 4],
+                "PowerPC": [16, 13, 10, 5]
+            }
+        };		
+		
+		
+        function populateTable() {
+            const tableBody = document.getElementById("data-table");
+            tableBody.innerHTML = "";
+            Object.keys(subCategories).forEach(main => {
+                let mainRow = `<tr><td><strong>${main}</strong></td><td></td><td></td><td></td></tr>`;
+                tableBody.innerHTML += mainRow;
+                Object.keys(subCategories[main]).forEach(sub => {
+                    let row = `<tr>
+                        <td>&nbsp;&nbsp;&nbsp;${sub}</td>
+                        <td>${subCategories[main][sub][0]}%</td>
+                        <td>${subCategories[main][sub][1]}%</td>
+                        <td>${subCategories[main][sub][2]}%</td>
+                    </tr>`;
+                    tableBody.innerHTML += row;
+                });
+            });
+        }
+        populateTable();
+
+        function generateStackedChart(containerId, index, title, mode) {
+            const data = Object.keys(subCategories).map(main => {
+                return {
+                    x: Object.keys(subCategories[main]),
+                    y: Object.keys(subCategories[main]).map(sub => subCategories[main][sub][index]),
+                    name: main,
+                    type: 'bar',
+                    text: Object.keys(subCategories[main]).map(sub => subCategories[main][sub][index] + '%'),
+                    textposition: 'auto'
+                };
+            });
+            
+            Plotly.newPlot(containerId, data, {
+                barmode: mode,
+                title: title,
+                xaxis: { title: 'Subcategories', automargin: true },
+                yaxis: { title: 'Power Consumption (%)' }
+            });
+        }
+
+        function generateComparisonChart(mode) {
+            const architectures = ["ARM", "x86", "PowerPC"];
+            const data = Object.keys(subCategories).map(main => {
+                return {
+                    x: architectures,
+                    y: architectures.map((_, i) => Object.values(subCategories[main]).reduce((sum, vals) => sum + vals[i], 0)),
+                    name: main,
+                    type: 'bar',
+                    text: architectures.map((_, i) => Object.values(subCategories[main]).reduce((sum, vals) => sum + vals[i], 0) + '%'),
+                    textposition: 'auto'
+                };
+            });
+            
+            Plotly.newPlot('comparisonChart', data, { barmode: mode, title: 'CPU Architecture Comparison' });
+        }
+		
+		function generateWorkloadCharts() {
+            Object.keys(workloads).forEach(workload => {
+                const container = document.createElement('div');
+                container.innerHTML = `<h3>${workload} Power Distribution</h3>`;
+                document.getElementById('workloads').appendChild(container);
+                
+                architectures.forEach(arch => {
+                    const divId = `workloadChart_${workload.replace(/\s+/g, '_')}_${arch.replace(/\s+/g, '_')}`;
+                    const chartContainer = document.createElement('div');
+                    chartContainer.id = divId;
+                    chartContainer.className = 'chart-container';
+                    chartContainer.style.margin = '40px';
+                    container.appendChild(chartContainer);
+
+                    const data = [{
+                        labels: categories,
+                        values: workloads[workload][arch],
+                        type: 'pie',
+                        name: arch,
+                        textinfo: 'percent',
+                        insidetextorientation: 'radial'
+                    }];
+
+                    Plotly.newPlot(divId, data, { title: `${workload} - ${arch} Power Distribution` });
+                });
+            });
+        }
+
+        function updateCharts() {
+            const mode = document.querySelector('input[name="chartMode"]:checked').value;
+            generateStackedChart('armStackedChart', 0, 'ARM Hierarchical Power Distribution', mode);
+            generateStackedChart('x86StackedChart', 1, 'x86 Hierarchical Power Distribution', mode);
+            generateStackedChart('ppcStackedChart', 2, 'PowerPC Hierarchical Power Distribution', mode);
+            generateComparisonChart(mode);
+            generateWorkloadCharts();
+        }
+        
+		
+		
+		
+        document.querySelectorAll('input[name="chartMode"]').forEach(radio => radio.addEventListener('change', updateCharts));
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+        }
+        
+        updateCharts();
+    </script>
+</body>
+</html>
