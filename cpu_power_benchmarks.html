@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CPU Power Distribution Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 1200px; margin: auto; }
+        .chart-container { width: 30%; height: 400px; display: inline-block; margin: 40px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        th { background-color: #f4f4f4; }
+        .tab-buttons { margin-bottom: 20px; }
+        .tab-buttons button { margin-right: 10px; padding: 10px; cursor: pointer; }
+        .tab-content { display: none; }
+        .active { display: block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>CPU Power Distribution Dashboard</h2>
+        <p>This dashboard provides a breakdown of power consumption across different CPU architectures (ARM, x86, PowerPC) based on execution units, memory hierarchy, and power management.</p>
+        
+        <div class="tab-buttons">
+            <button onclick="showTab('charts')">Charts</button>
+            <button onclick="showTab('table')">Data Table</button>
+            <button onclick="showTab('workloads')">Workload Power Distribution</button>
+        </div>
+        
+        <div id="charts" class="tab-content active">
+            <h3>Comparison Across Architectures</h3>
+            <div id="comparisonChart" class="chart-container"></div>
+        </div>
+        
+        <div id="table" class="tab-content">
+            <h3>Central Data Table</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Hierarchy</th>
+                        <th>ARM (%)</th>
+                        <th>x86 (%)</th>
+                        <th>PowerPC (%)</th>
+                    </tr>
+                </thead>
+                <tbody id="data-table"></tbody>
+            </table>
+        </div>
+
+        <div id="workloads" class="tab-content">
+            <h3>Workload Power Distribution</h3>
+        </div>
+    </div>
+
+    <script>
+        const architectures = ["ARM (In-Order)", "ARM (Out-of-Order)", "x86", "PowerPC"];
+        const categories = ["Execution Units", "Cache & Memory Subsystem", "Fabric & Interconnect", "Control & Power Management"];
+
+        const workloads = {
+            "Dhrystone": {
+                "ARM (In-Order)": [8, 6, 4, 2],
+                "ARM (Out-of-Order)": [10, 8, 5, 3],
+                "x86": [12, 10, 7, 3],
+                "PowerPC": [15, 12, 9, 4]
+            },
+            "Max Power": {
+                "ARM (In-Order)": [18, 12, 8, 4],
+                "ARM (Out-of-Order)": [20, 15, 10, 5],
+                "x86": [25, 18, 12, 7],
+                "PowerPC": [30, 20, 15, 8]
+            },
+            "Max Power L2": {
+                "ARM (In-Order)": [16, 10, 6, 3],
+                "ARM (Out-of-Order)": [18, 12, 7, 4],
+                "x86": [22, 15, 9, 5],
+                "PowerPC": [27, 18, 12, 6]
+            },
+            "Vector Benchmarks": {
+                "ARM (In-Order)": [12, 8, 5, 2],
+                "ARM (Out-of-Order)": [15, 10, 6, 3],
+                "x86": [18, 12, 8, 4],
+                "PowerPC": [20, 15, 10, 5]
+            },
+            "Typical Case": {
+                "ARM (In-Order)": [10, 7, 5, 2],
+                "ARM (Out-of-Order)": [12, 9, 6, 3],
+                "x86": [14, 11, 8, 4],
+                "PowerPC": [16, 13, 10, 5]
+            }
+        };
+
+        function generateWorkloadCharts() {
+            Object.keys(workloads).forEach(workload => {
+                const container = document.createElement('div');
+                container.innerHTML = `<h3>${workload} Power Distribution</h3>`;
+                document.getElementById('workloads').appendChild(container);
+                
+                architectures.forEach(arch => {
+                    const divId = `workloadChart_${workload.replace(/\s+/g, '_')}_${arch.replace(/\s+/g, '_')}`;
+                    const chartContainer = document.createElement('div');
+                    chartContainer.id = divId;
+                    chartContainer.className = 'chart-container';
+                    chartContainer.style.margin = '40px';
+                    container.appendChild(chartContainer);
+
+                    const data = [{
+                        labels: categories,
+                        values: workloads[workload][arch],
+                        type: 'pie',
+                        name: arch,
+                        textinfo: 'percent',
+                        insidetextorientation: 'radial'
+                    }];
+
+                    Plotly.newPlot(divId, data, { title: `${workload} - ${arch} Power Distribution` });
+                });
+            });
+        }
+        
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+        }
+        
+        generateWorkloadCharts();
+    </script>
+</body>
+</html>
